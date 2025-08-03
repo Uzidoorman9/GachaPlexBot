@@ -1,68 +1,104 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 
-const BACKEND_URL = 'https://gachaplexbot.onrender.com'; // change to your backend URL
-axios.defaults.withCredentials = true;
+const BACKEND_URL = 'https://gachaplexbot.onrender.com'; // your backend URL
+const FRONTEND_URL = 'https://your-frontend-url.com'; // your frontend URL
 
-export default function App() {
-  const [repoName, setRepoName] = useState('');
-  const [desc, setDesc] = useState('');
+function App() {
+  const [githubLoggedIn, setGithubLoggedIn] = useState(false);
+  const [discordLoggedIn, setDiscordLoggedIn] = useState(false);
+  const [botName, setBotName] = useState('');
+  const [botDesc, setBotDesc] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const generateBot = async () => {
-    if (!repoName.trim()) {
-      alert('Please enter a repo name');
+  // Simple check: you might want to create API endpoints to verify session status
+  // For demo, just enable buttons to test OAuth redirect flow
+
+  const handleGithubLogin = () => {
+    window.location.href = `${BACKEND_URL}/auth/github`;
+  };
+
+  const handleDiscordLogin = () => {
+    window.location.href = `${BACKEND_URL}/auth/discord`;
+  };
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError('');
+    setRepoUrl('');
+    if (!botName || botName.length < 3) {
+      setError('Bot name must be at least 3 characters');
+      setLoading(false);
       return;
     }
-    setLoading(true);
-    setRepoUrl('');
     try {
-      const res = await axios.post(`${BACKEND_URL}/generate`, {
-        name: repoName,
-        description: desc,
+      const res = await fetch(`${BACKEND_URL}/generate`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: botName, description: botDesc }),
       });
-      setRepoUrl(res.data.repoUrl);
-    } catch (e) {
-      alert(e.response?.data || 'Error generating bot. Make sure you are logged in with GitHub.');
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Failed to generate bot');
+      }
+      const data = await res.json();
+      setRepoUrl(data.repoUrl);
+    } catch (err) {
+      setError(err.message || 'Error generating bot');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: 'auto', padding: 20, fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ maxWidth: 600, margin: 'auto', padding: 20, fontFamily: 'Arial' }}>
       <h1>GachaPlex Bot Generator</h1>
 
-      <p>
-        <a href={`${BACKEND_URL}/auth/github`} style={{ marginRight: 10 }}>Login with GitHub</a>
-        <a href={`${BACKEND_URL}/auth/discord`}>Login with Discord</a>
-      </p>
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={handleGithubLogin} style={{ marginRight: 10 }}>
+          Login with GitHub
+        </button>
+        <button onClick={handleDiscordLogin}>Login with Discord</button>
+      </div>
 
-      <input
-        type="text"
-        placeholder="New repo name (e.g. my-cool-bot)"
-        value={repoName}
-        onChange={e => setRepoName(e.target.value)}
-        style={{ width: '100%', padding: 8, marginBottom: 10 }}
-      />
+      <div style={{ marginBottom: 20 }}>
+        <input
+          type="text"
+          placeholder="Bot repo name"
+          value={botName}
+          onChange={e => setBotName(e.target.value)}
+          style={{ width: '100%', padding: 8, marginBottom: 10 }}
+        />
+        <textarea
+          placeholder="Bot description (optional)"
+          value={botDesc}
+          onChange={e => setBotDesc(e.target.value)}
+          style={{ width: '100%', padding: 8, minHeight: 80 }}
+        />
+      </div>
 
-      <textarea
-        placeholder="Describe your bot (optional)"
-        rows={4}
-        value={desc}
-        onChange={e => setDesc(e.target.value)}
-        style={{ width: '100%', padding: 8, marginBottom: 10 }}
-      />
-
-      <button onClick={generateBot} disabled={loading} style={{ padding: '10px 20px' }}>
-        {loading ? 'Generating...' : 'Generate Bot'}
+      <button onClick={handleGenerate} disabled={loading}>
+        {loading ? 'Generating...' : 'Generate Bot Repo'}
       </button>
 
+      {error && (
+        <div style={{ marginTop: 20, color: 'red' }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
       {repoUrl && (
-        <p style={{ marginTop: 20 }}>
-          Your bot repo is ready: <a href={repoUrl} target="_blank" rel="noreferrer">{repoUrl}</a>
-        </p>
+        <div style={{ marginTop: 20 }}>
+          <strong>Bot Repo Created:</strong>{' '}
+          <a href={repoUrl} target="_blank" rel="noopener noreferrer">
+            {repoUrl}
+          </a>
+        </div>
       )}
     </div>
   );
 }
+
+export default App;
