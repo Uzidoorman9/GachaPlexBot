@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const axios = require('axios');
-const simpleOauth2 = require('simple-oauth2');
+const { AuthorizationCode } = require('simple-oauth2');
 const { Octokit } = require('@octokit/rest');
 const cors = require('cors');
 
@@ -18,11 +18,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'supersecret',
   resave: false,
   saveUninitialized: true,
-  cookie: { maxAge: 30 * 60 * 1000 } // 30 minutes session
+  cookie: { maxAge: 30 * 60 * 1000 } // 30 minutes
 }));
 
 // OAuth2 clients
-const githubOAuth = simpleOauth2.create({
+const githubOAuth = new AuthorizationCode({
   client: {
     id: process.env.GITHUB_CLIENT_ID,
     secret: process.env.GITHUB_CLIENT_SECRET,
@@ -34,7 +34,7 @@ const githubOAuth = simpleOauth2.create({
   },
 });
 
-const discordOAuth = simpleOauth2.create({
+const discordOAuth = new AuthorizationCode({
   client: {
     id: process.env.DISCORD_CLIENT_ID,
     secret: process.env.DISCORD_CLIENT_SECRET,
@@ -46,9 +46,9 @@ const discordOAuth = simpleOauth2.create({
   },
 });
 
-// Redirect user to GitHub OAuth login
+// Redirect to GitHub OAuth login
 app.get('/auth/github', (req, res) => {
-  const authorizationUri = githubOAuth.authorizationCode.authorizeURL({
+  const authorizationUri = githubOAuth.authorizeURL({
     redirect_uri: `${process.env.BASE_URL}/callback/github`,
     scope: 'repo user',
     state: Math.random().toString(36).substring(2, 15),
@@ -64,8 +64,8 @@ app.get('/callback/github', async (req, res) => {
     redirect_uri: `${process.env.BASE_URL}/callback/github`,
   };
   try {
-    const accessToken = await githubOAuth.authorizationCode.getToken(options);
-    req.session.githubToken = accessToken.access_token;
+    const accessToken = await githubOAuth.getToken(options);
+    req.session.githubToken = accessToken.token.access_token;
     res.redirect(`${process.env.FRONTEND_URL}/generator`);
   } catch (error) {
     console.error('GitHub OAuth error:', error.message);
@@ -73,9 +73,9 @@ app.get('/callback/github', async (req, res) => {
   }
 });
 
-// Redirect user to Discord OAuth login
+// Redirect to Discord OAuth login
 app.get('/auth/discord', (req, res) => {
-  const authorizationUri = discordOAuth.authorizationCode.authorizeURL({
+  const authorizationUri = discordOAuth.authorizeURL({
     redirect_uri: `${process.env.BASE_URL}/callback/discord`,
     scope: 'identify',
     state: Math.random().toString(36).substring(2, 15),
@@ -91,8 +91,8 @@ app.get('/callback/discord', async (req, res) => {
     redirect_uri: `${process.env.BASE_URL}/callback/discord`,
   };
   try {
-    const accessToken = await discordOAuth.authorizationCode.getToken(options);
-    req.session.discordToken = accessToken.access_token;
+    const accessToken = await discordOAuth.getToken(options);
+    req.session.discordToken = accessToken.token.access_token;
     res.redirect(`${process.env.FRONTEND_URL}/generator`);
   } catch (error) {
     console.error('Discord OAuth error:', error.message);
@@ -139,7 +139,7 @@ app.post('/generate', async (req, res) => {
       });
     }
 
-    // Clear tokens immediately to avoid keeping info
+    // Clear tokens immediately after
     req.session.githubToken = null;
     req.session.discordToken = null;
 
@@ -150,7 +150,7 @@ app.post('/generate', async (req, res) => {
   }
 });
 
-// Simple generator for starter bot files
+// Starter bot files generator
 function generateBotFiles(description = '') {
   return {
     'index.js': `const { Client, GatewayIntentBits } = require('discord.js');
